@@ -1,0 +1,303 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+## Import data 
+```{r}
+May_data<-read_csv('D:\\Hotel\\Hotel_24 - May.csv') #Up to date 28
+May_data
+```
+
+
+
+## Prepare data
+```{r}
+# Convert char to factors and Dates to their format
+May_data %>% mutate(Remaining_Food=as.factor(Remaining_Food),
+                    Date=as.Date(Date,tryFormats = "%d/%m/%Y"))->Clean_data
+# Check for missing data
+colSums(is.na(Clean_data)) # No missing data
+
+# Check for duplicates
+sum(duplicated(Clean_data)) # No duplicates
+```
+
+
+
+```{r}
+#
+Clean_data %>% select(contains('Man'),-Managu) %>% rowSums()->Managu
+
+Clean_data %>% select(-Managu) %>% mutate(Managu=Managu,Managu_F=Managu) %>% mutate(Managu=case_when(Managu <=4 ~ '1',
+       Managu>4 & Managu<=8 ~'2',
+       Managu>8 & Managu<=12 ~'3',
+       Managu>12 & Managu<=16 ~'4',
+       Managu>16  ~'5',),Managu=as.factor(Managu))->Clean_data2
+
+#
+Clean_data2 %>% select(Amount:Managu_F,Soda,Dasani_.5ltr:Water_1ltr,Eggs)->train_data;train_data
+train_data %>% select(contains('Ngano')) %>% rowSums()->Ngano
+train_data %>% select(-contains('Ngano')) %>% mutate(Ngano=Ngano)->Train_data
+```
+
+
+
+## Menu Engineering
+
+For this section we are going to split the data to be able to perform menu engineering on the various dishes as well as snacks
+To start of we are going to work  with the snacks section 
+
+## 1. Snacks
+```{r}
+# snacks section
+Clean_data %>% select(chapo:`Sausage/Smokie`)-> Snacks
+
+Snacks %>% colSums()
+
+# chapo          Ndazi             Tm           cake          Hcake 
+#  1325            994            132              0            115 
+#  Eggs         Omelet Sausage/Smokie 
+#   246              2             20 
+```
+
+
+
+## 2.Mix
+```{r}
+Clean_data %>% select(ChapoMix:PilauMix)->Mix
+Mix
+colSums(Mix)
+# ChapoMix  Walimix Ugalimix PilauMix 
+#     129      134      147       45 
+
+# Check normality
+shapiro.test(Mix$Walimix)  # p-value = 0.2583
+shapiro.test(Mix$Ugalimix)  #p-value = 0.1131
+
+# Check equality of variances
+
+# Perform t-test
+t.test(Mix$Ugalimix,Mix$Walimix)
+t.test(Mix$Ugalimix,Mix$ChapoMix)
+
+## Plots
+Count<-colSums(Mix)
+Data_M<-as.data.frame(Count)
+Data_M
+ 
+129+134+147+45
+
+```
+
+## Beef
+```{r}
+Clean_data %>% select(BeefChapo:BeefPilau)->Beef
+Beef
+# BeefChapo BeefUgali  BeefRice BeefPilau 
+#       32        96        23        15 
+
+CountBeef<-colSums(Beef)
+Data_B<-as.data.frame(CountBeef)
+Data_B
+
+32  +      96   +     23     +   15
+```
+
+
+## Kuku
+```{r}
+Clean_data %>% select(KukuChapo:KukuPilau)->KUKU
+KUKU
+# KukuChapo KukuUgali  KukuRice KukuPilau 
+#        76       130        29         3 
+CountKuku<-colSums(KUKU)
+Data_K<-as.data.frame(CountKuku)
+Data_K
+
+ 76   +    130   +     29     +    3 
+```
+## Managu
+```{r}
+Clean_data %>% select(UgaliManagu:PilauManagu)->Managu
+Managu
+# UgaliManagu  RiceManagu ChapoManagu PilauManagu 
+#          87           1           10           0 
+CountManagu<-colSums(Managu)
+Data_man<-as.data.frame(CountManagu)
+Data_man
+
+ 87     +      1      +     10     +      0 
+```
+
+## Drinks
+
+```{r}
+Clean_data %>% select(Tea:Water_1ltr)->Drinks
+
+colSums(Drinks)
+
+#        Tea  Black Coffee   WhiteCofee     Lemon Tea    Concusion 
+#        3300           69           82            0            0 
+#        Predator    Soda  Plastic Soda    Dasani_.5ltr  Dasani_1ltr 
+#           7          202            0           16           13 
+#     Water_.5ltr   Water_1ltr 
+#          33           21 
+```
+
+
+
+
+
+## Model 
+
+Am interested to understand the relationship between beef and kuku on the day to day sales
+
+```{r}
+ shapiro.test(Clean_data$Amount)
+# Data appears to be normaly distributed
+summary(Clean_data$Amount)
+
+ggplot(data = Clean_data,aes(x=Amount))+geom_density()+
+  geom_vline(aes(xintercept = mean(Amount),linetype='Mean'),col ='red')+
+  geom_vline(aes(xintercept = median(Amount),linetype='Median'),col ='blue')
+
+
+summary.lm(lm(Amount~Meat+Kuku+Milk+Ngano_Chapo-1,data = Clean_data))
+
+
+# Summing up the ngano variables
+summary.lm(lm(Amount~Meat+Kuku+Milk+Ngano-1+Soda,data = Train_data))
+# Odd the no. ngano used for the raw materials have no significant as compared to chapo alone.
+
+# Best model
+summary.lm(lm(Amount~Meat+Kuku+Milk+Ngano_Chapo-1+Soda+Eggs,data = Clean_data))
+
+summary.lm(lm(Amount~Meat+Kuku+Milk+Ngano_Chapo+Soda+Eggs+Remaining_Food,data = Clean_data))
+
+summary.lm(lm(Amount~Meat+Kuku+Milk+Ngano_Chapo-1+Soda+Eggs+Water_.5ltr,data = Clean_data))
+
+summary.lm(lm(Amount~Meat+Kuku+Milk+Ngano_Chapo-1+Soda+Eggs+Water_.5ltr+Ngano_ndazi,data = Clean_data))
+
+summary.lm(lm(Amount~Meat+Kuku+Milk+Ngano_Chapo-1+Soda+Eggs+Water_.5ltr+Dasani_.5ltr,data = Clean_data))
+
+Model_best<-lm(Amount~Meat+Kuku+Milk+Ngano_Chapo-1+Soda+Eggs,data = Clean_data)
+
+# Check assumptions if are violated
+
+library(performance)
+
+check_collinearity(Model_best)  # High correlation Meat, Milk
+
+check_heteroscedasticity(Model_best) # Not violated
+
+check_autocorrelation(Model_best) # Not violated
+
+shapiro.test(Model_best$residuals) # Not violated
+
+# Check linearity
+check_model(Model_best)  # Not violated
+
+
+```
+
+From the may model data the most significant variables in the model are:
+ - Meat
+ - Kuku
+ - Milk
+ - Ngano_chapo
+ - Soda
+ - Eggs
+ 
+with coefficient of meat with the most significant impact on the model
+
+From the assumption section investigate how to prevent multicollinearity in the data using a lasso-ridge elastic net regression model on the data
+
+## Assignment use the previous months data to understand how the model is performing on the unsupervised learning
+
+```{r}
+# Test data we will use the March dataset
+
+March_data<-read_csv('D:\\Hotel\\Hotel_24 - March.csv')
+
+March_data %>% select(Ngano,Meat,Kuku,Milk,Soda,Eggs) %>% rename(Ngano_Chapo=Ngano)->Test_data
+
+March_data %>% select(Amount)->Test_labels
+
+Pred_labels<-predict(Model_best,Test_data)
+
+cbind(Test_labels,Pred_labels)
+
+# Mae
+sum(abs(Pred_labels-Test_labels))/length(Pred_labels) #2798.374
+```
+
+**Note** The models performs poorly at predicting the test data this is probably caused by over fitting on the test data.
+
+**Assignment**  Find remedies to remove over fitting in models
+
+
+## *Overfitting in models*
+
+Statisticians have conducted simulation studies which indicate you should have at least 10-15 observations for each term in a linear model. The number of terms in a model is the sum of all the independent variables, their interactions, and polynomial terms to model curvature.
+
+For instance, if the regression model has two independent variables and their interaction term, you have three terms and need 30-45 observations. Although, if the model has multicollinearity or if the effect size is small, you might need more observations.
+
+
+
+## How to detect overfitting in models
+
+However, for linear regression, there is an excellent accelerated cross-validation method called predicted R-squared. This method doesn’t require you to collect a separate sample or partition your data, and you can obtain the cross-validated results as you fit the model. Statistical software calculates *predicted R-squared* using the following automated procedure:
+
+
+
+### Predicted r_squared function
+```{r}
+Pred_Rsq<-function(pred_labels,test_labels){
+  # Find the SST ,SSR ,SSE
+  # Calculate the r-Squared for the predicted observations
+  
+  
+  SST<-sum((test_labels-colMeans(test_labels))^2)
+  SSE<-sum((test_labels-pred_labels)^2)
+  
+  R<-(1-(SSE/SST))
+  return(paste0('Predicted R_squared : ',round(R,3),'%'))
+  #return(R)
+}
+
+colMeans(Test_labels,na.rm = T)
+mean(Pred_labels)
+SST<-sum((Test_labels-colMeans(Test_labels))^2)
+SSE<-sum((Test_labels-Pred_labels)^2)
+SSE;SST
+1-(SSE/SST)
+
+# Test it on the Model_best predictions
+Pred_Rsq(Pred_labels,test_labels = Test_labels)
+```
+
+
+## Food for thought 
+
+Try using the snacks variable(Do not use the stock data ) in predicting the daily sales to understand which models best works with the data
+```{r}
+Clean_data2 %>% dplyr::select(chapo:Tm,Hcake,Eggs,Tea:WhiteCofee,Soda,Dasani_.5ltr:Water_1ltr,Amount,Ugali:Managu,-Managu,-Matumbo)->New_data
+
+
+summary.glm(glm(Amount~.,family = Gamma(link = 'log'),data = New_data))
+summary.glm(glm(Amount~Meat+Kuku+Tea+Eggs,family = Gamma(link = 'log'),data = New_data))
+
+```
+
+```{r}
+Test_data
+
+Train_data
+```
+
+
+
+
+
+

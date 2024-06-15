@@ -1,0 +1,283 @@
+---
+title: "Stock Analysis"
+output: html_notebook
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+# References 
+
+* [Chi-square calculator]('https://www.socscistatistics.com/pvalues/chidistribution.aspx')
+
+```{r}
+# GLM's
+# R_squared
+R_squared<-function(x){
+  'x must be a glm model'
+  null.dev=x$null.deviance
+  resid.dev=x$deviance
+  return(1-(resid.dev/null.dev))
+}
+
+# Chi square value for the GLM's while looking for the goodness of fit in the model
+Chisq_GLM=function(x){
+  'x must be a glm model'
+  null.dev=x$null.deviance
+  resid.dev=x$deviance
+  return(null.dev-resid.dev)
+}
+  
+```
+
+
+```{r}
+library(tidyverse)
+```
+
+This project was started to keep track of the day to day analysis of the
+hotel and try to come up with a continuous update of the data
+
+## Import 2023 data
+
+> Use the previous merged data
+
+# Import 2024 data
+
+> Try to use the key raw materials to predict the sales : 1)Ngano
+> 2)Sugar 3)Ugali 4)Milk 5)Meat 6)Matumbo 7)Managu 8)Rice 9)Kuku 10)Food
+> remained(Kuku,Beef,Ugali) 11)Sales
+
+```{r}
+library(readxl)
+# Jan 
+Jan <- read_excel("Hotel_24.xlsx", sheet = "January ")
+# Feb 
+Feb <- read_excel("Hotel_24.xlsx", sheet = "February")
+
+# March 
+March <- read_excel("Hotel_24.xlsx", sheet = "March")
+
+# April
+April <- read_excel("Hotel_24.xlsx", sheet = "April")
+
+#May
+
+May <- read_excel("Hotel_24.xlsx", sheet = "May")
+```
+
+# Test data
+
+```{r}
+# Jan-March
+Jan %>% select(Ngano:Rice,Amount)->A
+Feb %>% select(Ngano:Rice,Amount)->B
+March %>% select(Ngano:Rice,Amount)->C
+
+```
+
+# Train data
+
+```{r}
+
+#April-May
+April %>% select(Ngano_Chapo:Rice,Amount)
+May %>% select(Ngano_Chapo:Rice,Amount)
+
+```
+
+# Combine the Ngano variables
+
+```{r}
+#April
+April %>% select(starts_with('Ngano')) %>% rowSums(na.rm = T)->Ngano
+April %>% select(Ugali:Remaining_Food,Amount) %>% cbind(Ngano)->April_N
+
+# May
+May %>% select(starts_with('Ngano')) %>% rowSums(na.rm = T)->Ngano
+May %>% select(Ugali:Remaining_Food,Amount) %>% cbind(Ngano)->May_N
+
+```
+
+# Merge April-May datset
+
+```{r}
+rbind(April_N,May_N)->Merged_data
+
+Merged_data %>% select(-Remaining_Food)->data_x
+
+colSums(is.na(data_x))
+
+```
+
+# Merge Jan- March data to data_X(April-May)
+
+```{r}
+rbind(A,B,C,data_x) %>% drop_na()->Stock_data
+Stock_data
+
+```
+
+# Create a GLM model for the stock data(Use as the base model)
+
+```{r}
+Stock_data
+
+# Check properties of the dependent variable
+Stock_data$Amount
+
+shapiro.test(Stock_data$Amount)  # H0: Their is  normality in the data
+
+ks.test(Stock_data$Amount,'pnorm')
+
+# The Amount variable is not normal distributed thus a glm model is best preffered 
+plot(density(Stock_data$Amount))
+ggplot2::ggplot(data = Stock_data,aes(Amount))+
+  geom_density()+
+  geom_vline(aes(xintercept = mean(Amount),linetype = "Mean"),
+             col ="blue")+
+  geom_vline(aes(xintercept = median(Amount), linetype="Median"),
+             col = "red")+
+  theme_classic()
+# The data is rightly  skewed
+```
+
+# Gamma regression
+
+```{r}
+# Canonical Form
+fit.gam=glm(Amount~.,data = Stock_data,family = Gamma)
+summary.glm(fit.gam)
+
+# Log-Link
+fit.gam.log=glm(Amount~.,data = Stock_data,family = Gamma(link = 'log'))
+summary.glm(fit.gam.log)
+```
+
+# Inverse-gaussian
+
+```{r}
+# Inverse
+fit.ig.inv=glm(Amount~.,data = Stock_data,family = inverse.gaussian(link = 'inverse'))
+summary.glm(fit.ig.inv)
+# Canonical
+fit.ig.invquad=glm(Amount~.,data = Stock_data,family = inverse.gaussian)
+summary.glm(fit.ig.invquad)
+
+# Number of predictors is 9
+# To compute the chi square to test the model fitness
+0.00030818-0.00021302 #[9.516e-05] with a degree of freedom of 9
+chisq.test(fit.ig.inv)
+43.230-16.713
+```
+
+# Findings
+
+* Performing a chi-square test to check for the goodness of fit in the data
+* Using ANOVA to identify the model selection
+
+```{r}
+# Chisq test
+
+
+model_fit=glm(Amount~Milk+Kuku+Meat,data = Stock_data,family=inverse.gaussian(link = 'inverse'))
+
+summary.glm(model_fit)
+
+0.00030818-0.00022396
+#The P-Value is 1. The result is not significant at p < .05.
+# The model performs bad
+
+
+# Fitting using Gamma glm using it canonical form (inverse)
+model_fit2=glm(Amount~Kuku+Meat,data = Stock_data, 
+               family = Gamma()
+               )
+summary.glm(model_fit2)
+
+model_fit2$null.deviance-model_fit2$deviance
+# Computing the goodness of fit
+4.1855-3.1197    #[1.0658] with a degree freedom of 2
+#The P-Value is .5869. The result is not significant at p < .05.
+R_squared=1-model_fit2$deviance/model_fit2$null.deviance ;R_squared
+#[1] 0.2546332
+#In this case the deviance is(residual deviance)
+
+# Interaction effect
+model_fit3=glm(Amount~Kuku*Meat,family = Gamma,data = Stock_data)
+summary.glm(model_fit3)
+
+Chisq_GLM(model_fit3) # 1.090872 with df=3
+#The P-Value is .779295. The result is not significant at p < .05.
+
+model_fit4=glm(Amount~Kuku*Meat,family = inverse.gaussian(link = 'inverse'),data = Stock_data)
+summary.glm(model_fit4)
+Chisq_GLM(model_fit4) #8.166275e-05
+#The P-Value is .9999 The result is not significant at p < .05.
+
+anova(model_fit,test = 'Chisq')
+anova(model_fit2,test = 'Chisq')
+anova(model_fit3,test = 'Chisq')
+anova(model_fit4,test = 'Chisq')
+anova(fit.ig.inv,test = 'Chisq')
+
+# Model Selection
+summary(MASS::stepAIC(fit.ig.inv,trace = 0))
+summary(MASS::stepAIC(fit.gam,trace = 0))
+
+Best_model<-glm(formula = Amount ~ Milk + Kuku + Meat + Rice, 
+    family = inverse.gaussian(link = "inverse"),data = Stock_data)
+summary(Best_model)
+
+anova(Best_model,test = 'Chisq')
+anova(Best_model,model_fit4,model_fit3,test = 'Chisq')
+
+# Computing various r_squared for the model 
+R_squared(Best_model)  #0.2927708
+R_squared(model_fit4) #0.2649873
+R_squared(model_fit2) #0.2546332
+R_squared(model_fit3) #0.2606302
+R_squared(fit.ig.inv) #0.313553
+R_squared(fit.gam) #0.3113659
+
+# 
+```
+💡 **Note**
+
+However, this R2 has a different interpretation than in linear regression. In particular:
+- It is not the percentage of variance explained by the model, but rather a ratio indicating how close is the fit to being perfect or the worst.
+- It is not related to any correlation coefficient.
+
+## Visualization
+
+```{r}
+plot(fit.gam,1)
+plot(fit.ig.inv,1)
+plot(fit.ig.invquad,1)
+```
+
+#
+
+
+
+```{r}
+anova(model_fit2)
+model_fit2
+write.csv(Stock_data,"Hotel_24.csv")
+```
+
+
+
+
+# Assumption
+```{r}
+
+# 1.Multicollinearity
+Stock_data
+
+
+
+
+
+```
+

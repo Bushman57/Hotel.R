@@ -1,0 +1,412 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Import data
+```{r}
+May_data<-read_csv('C:\\Users\\Favins\\Downloads\\Hotel_Analysis\\Hotel_24 - May.csv')  # Up to date 19
+May_data<-read_csv('D:\\Hotel\\Hotel_24 - May.csv') #Up to date 28
+May_data
+```
+
+
+
+# Data cleaning
+```{r}
+# Convert char to factors and Dates to their format
+May_data %>% mutate(Remaining_Food=as.factor(Remaining_Food),
+                    Date=as.Date(Date,tryFormats = "%d/%m/%Y"))->Clean_data
+# Check for missing data
+colSums(is.na(Clean_data)) # No missing data
+
+# Check for duplicates
+sum(duplicated(Clean_data)) # No duplicates
+
+```
+
+
+
+# Reshape the data
+```{r}
+library(tidyverse)
+# Impute the managu variable
+# Steps
+# 1. Select variables containing the Man ('Managu')
+# 2. Sum them row wise to get the number of ('Managu')sold in that day
+# 3. Convert the variable into Factors with 5 levels 
+
+# Apply the same technique to the Ngano variable
+
+#
+Clean_data %>% select(contains('Man'),-Managu) %>% rowSums()->Managu
+
+Clean_data %>% select(-Managu) %>% mutate(Managu=Managu,Managu_F=Managu) %>% mutate(Managu=case_when(Managu <=4 ~ '1',
+       Managu>4 & Managu<=8 ~'2',
+       Managu>8 & Managu<=12 ~'3',
+       Managu>12 & Managu<=16 ~'4',
+       Managu>16  ~'5',),Managu=as.factor(Managu))->Clean_data2
+
+#
+Clean_data2 %>% select(Amount:Managu_F,Soda,Dasani_.5ltr:Water_1ltr,Eggs)->train_data;train_data
+train_data %>% select(contains('Ngano')) %>% rowSums()->Ngano
+train_data %>% select(-contains('Ngano')) %>% mutate(Ngano=Ngano)->Train_data
+
+```
+# Data Exploration
+```{r}
+# What are the best selling dishes and drinks to understand customer preference ?
+# Determine the least popular items to consider menu optimization
+# Revenue analysis 
+# Menu engineering
+#Seasonal and Temporal trends in the sales as well as in the food and beverage consumption
+Train_data
+```
+
+
+#  Construct base GLM Model
+```{r,warning=FALSE,message=FALSE}
+
+# Response variable
+Train_data$Amount
+median(Train_data$Amount)  # 13410
+mean(Train_data$Amount)    # 13298.57
+
+ggplot(data = Clean_data,aes(x=Amount))+geom_density()+
+  geom_vline(aes(xintercept = mean(Amount),linetype = "Mean"),col ='red')+
+  geom_vline(aes(xintercept = median(Amount),linetype = "Median"),col ='blue')
+
+# Normality test
+shapiro.test(Train_data$Amount)
+# Data appears to be normally distributed (p-value = 0.4031) 
+# We fail to reject the null hypothesis and conclude due to insufficient evidence  the data is normal
+
+Model_May<-glm(Amount~.-Date-Matumbo-Managu,family = gaussian,data = Train_data)
+summary(Model_May)# Matumbo was removed due to no data was collected 
+
+Chisq_GLM(Model_May)
+8.56e7
+
+#Assumptions
+library(performance)
+# 1.Multicollinearity
+check_collinearity(Model_May)  # Their is moderate correlation  between the Independent variable
+corr_data<-cor(Train_data%>%select(-Matumbo, -Date, -Remaining_Food,-Managu))
+corrplot::corrplot(corr_data,method = 'number',type = 'upper',bg ='yellow')
+
+
+
+# 2.Auto correlation
+check_autocorrelation(Model_May) #  auto correlation present
+
+# 3.Normality of residuals
+shapiro.test(Model_May$residuals) #Normally distributed
+
+# 4.Linearity
+GGally::ggpairs(Train_data %>% select(-Date,-Matumbo, -Managu))
+# Most of the Independent variables don't appear to have a linear relationship with the dependent variable
+
+# 5.Heteroscedasticity
+check_heteroscedasticity(Model_May) #Error variance appears to be homoscedastic 
+
+
+##### Using Multiple Linear Regression technique
+Lm_model<-lm(Amount~.-Date -Matumbo ,data = Train_data)
+summary.lm(Lm_model)
+
+## Multiple R-squared:  0.998,	Adjusted R-squared:  0.9634  
+# p-value: 0.1454 the model is not significant 
+
+
+##### Removing Managu factor variable
+LM_model2<-lm(Amount~.-Date -Matumbo -Managu,data = Train_data)
+summary.lm(LM_model2)
+
+# Checking assumptions
+check_collinearity(LM_model2)
+ # Moderate correlation for the following variables
+ #  Remaining_Food
+ # Eggs
+ # 
+check_autocorrelation(LM_model2) # No auto correlation
+
+check_heteroscedasticity(LM_model2) #Error variance are homoscedastic
+
+shapiro.test(LM_model2$residuals) # The residuals are normally distributed
+
+check_model(LM_model2) # Linearity is violated
+
+##### Removing The intercept
+LM_model3<-lm(Amount~.-Date -Matumbo -Managu -1,data = Train_data)
+summary.lm(LM_model3)
+summary.lm(lm(Amount~1,data = Train_data))
+# Checking assumptions
+check_collinearity(LM_model3)
+ # High correlation for the following variables
+ # Milk 12.94 
+ # Sugar 13.36 
+ # Remaining_Food 14.08 
+ # Water_.5ltr 25.43 
+ # Water_1ltr 11.30 
+
+check_autocorrelation(LM_model3) # No auto correlation
+
+check_heteroscedasticity(LM_model3) #Error variance are homoscedastic
+
+shapiro.test(LM_model3$residuals) # The residuals are normally distributed
+
+check_model(LM_model3) # Linearity is violated
+
+# Using model selection
+```
+
+-Something seems to be odd with the data 
+-It fits well based on the chi square test for testing the goodness of fit but the values of the deviance are also to high suggesting the model has wrong prediction
+-Am going to expand the same research on the neural networks to observe how they behave with  the limited data.
+- On re-adjusting the data to include the drinks section(soda:Water:Dasani) and removing the factor variable managu we observe that the model improves although the model is still not significant `possible hunch`--Multicollinearity use $$Lasso/Ridge $$ models.
+_ Removing the intercept from the model: The model becomes statistically significant as compared to the null model.The reason for removing the intercept is because I believe that if none of the predictor variables are added to the model then the sales should be zero.
+
+# Note
+The Adjusted R_squared is really low as compared to the Multiple R_squared indicating some variables have high penalties when added to the model
+
+
+## Logistic model
+-Come up with a logistic model to test if the Remaining food can be predicted by the model
+
+
+
+```{r}
+Train_data %>% mutate(Remaining_Food=case_when(Remaining_Food=='Yes'~1,
+                                               Remaining_Food=='No'~0))->data_May
+Logit_model<-glm(Remaining_Food~Kuku+Sugar+Amount+Ugali+Milk+Meat ,family = binomial(),data = data_May)
+summary.glm(Logit_model)
+
+
+summary.glm(glm(Remaining_Food~ Amount+Ugali+Milk+Kuku+Meat,family = binomial,data = data_May))
+summary.glm(glm(Remaining_Food~-1-Date -Managu_F,family = binomial,data = data_May))
+names(data_May)
+```
+
+# Standardize data
+```{r}
+# Task
+Train_data %>% group_by(Managu) %>% summarise(count=n())
+#i)Convert the factors into one hot encoding
+Train_data %>% mutate(Man_4=ifelse(Managu=='1',1,0),
+                      Man_8=ifelse(Managu=='2',1,0),
+                      Man_12=ifelse(Managu=='3' | Managu=='4',1,0)) %>% select(-Managu,-Matumbo)->X_train
+#ii)Take the max value of each group and divide through by x
+scaling<-function(x,na.rm=TRUE)(x/max(x))
+X_train %>% mutate_if(is.numeric,scaling)->x_train
+
+x_train
+
+
+```
+
+# EDA analysis
+```{r,warning=FALSE,message=FALSE}
+#x_train$Amount<-Clean_data$Amount
+
+X_train %>% summary()
+x_train
+
+ggplot(data = X_train,aes(x=Milk))+
+  geom_density()+
+  geom_vline(aes(xintercept = mean(Milk),linetype ='Mean'),col = "steelblue")
+
+GGally::ggpairs(X_train %>% select(-Date))
+```
+
+
+#
+```{r,message=FALSE}
+# Kuku
+ggplot(data = X_train,aes(x=Kuku,y= Amount,fill=Remaining_Food))+
+geom_point()+geom_smooth(method = 'lm',formula = 'y~x')+
+  geom_hline(aes(xintercept=mean(Kuku),linetype ='Mean'),col = 'black')
+# Meat
+ggplot(data =X_train, aes(y=Amount,x=Meat))+
+  geom_point()+
+  geom_hline(aes(xintercept=mean(Meat),linetype ='Mean'),col = 'black')
+# Sugar
+ggplot(data = X_train, aes(x=Amount, y=Sugar))+
+  geom_point()+geom_smooth(method = 'lm')+
+  geom_hline(aes(yintercept=mean((Sugar)),linetype ='Mean'),col = 'black')
+# Milk
+ggplot(data = X_train, aes(x=Amount, y=Milk,fill=Remaining_Food))+
+  geom_point()+geom_smooth()+
+  geom_hline(aes(yintercept=mean(Milk),linetype ='Mean'),col = 'black')
+# Ugali
+ggplot(data = X_train, aes(x=Amount, y=Ugali,fill=Remaining_Food))+
+  geom_point()+geom_smooth()+
+  geom_hline(aes(yintercept=mean(Ugali),linetype ='Mean'),col = 'black')
+# Rice
+ggplot(data = X_train, aes(x=Amount, y=Rice,fill=Remaining_Food))+
+  geom_point()+geom_smooth()+
+  geom_hline(aes(yintercept=mean(Rice),linetype ='Mean'),col = 'black')
+# Ngano
+ggplot(data = X_train, aes(x=Amount, y=Ngano,fill=Remaining_Food))+
+  geom_point()+geom_smooth()+
+  geom_hline(aes(yintercept=mean(Ngano),linetype ='Mean'),col = 'black')
+# Managu
+ggplot(data = X_train, aes(x=Amount, y=Managu_F,fill=Remaining_Food))+
+  geom_point()+geom_smooth()+
+  geom_hline(aes(yintercept=mean(Managu_F),linetype ='Mean'),col = 'black')
+# Man_4
+ggplot(data = X_train, aes(x=Amount, y=Man_4,fill=Remaining_Food))+
+  geom_point()+geom_smooth()
+# Man_8
+ggplot(data = X_train, aes(x=Amount, y=Man_8,fill=Remaining_Food))+
+  geom_point()+geom_smooth()
+# Man_12
+ggplot(data = X_train, aes(x=Amount, y=Man_12,fill=Remaining_Food))+
+  geom_point()+geom_smooth()
+
+# Remaining_Food
+
+ggplot(data = X_train,aes(x=Sugar,y=Milk))+geom_point()
+```
+#
+>
+No linear relationship between the predictors and the dependent variable
+
+
+
+
+```{r}
+mean(X_train$Managu_F)
+X_train
+```
+
+
+
+# Fit a lasso/ Ridge  and Elastic regression model
+```{r}
+library(glmnet)
+set.seed(42)
+X<-as.matrix(Train_data %>% select(-Amount,-Date,-Managu,-Matumbo))
+y<-Train_data$Amount
+
+# Fit a Ridge regression
+alpa0.fit=cv.glmnet(X,y,type.measure = 'mse',alpha=0,family='gaussian')
+
+alpa0.predict=predict(alpa0.fit,s=alpa0.fit$lambda.1se,newx = X)
+#lambda.1se this is model with the fewest parameters
+
+# Calculate the mean squared error
+mean((y-alpa0.predict)^2)
+#7599151
+
+# Fit a Lasso Regression model
+alpha1.fit=cv.glmnet(X,y,type.measure = 'mse',alpha =1,family= 'gaussian')
+
+alpha1.predict=predict(alpha1.fit,s=alpha1.fit$lambda.1se,newx = X)
+
+# Calculate the mean squared error
+mean((y-alpha1.predict)^2)
+#5403930
+
+# Fit a Elastic net Regression model
+alpha0.5.fit=cv.glmnet(X,y,type.measure = 'mse',alpha =1,family= 'gaussian')
+
+alpha0.5.predict=predict(alpha0.5.fit,s=alpha0.5.fit$lambda.1se,newx = X)
+
+# Calculate the mean squared error
+mean((y-alpha0.5.predict)^2)
+#4471404
+
+
+```
+
+### Note:
+-We couldn't split the data into train and test data because of our sample size 
+-For the previous examples on Lasso Regression we used specific values of alpha but to get the best value for alpha we need to try a bunch of values for alpha
+```{r}
+list.of.fits<-list()
+set.seed(42)
+# Use for loop to try different values for alpha
+for (i in 0:10) {
+  fit.name=paste0('alpha',i/10) # when i=0 the 0/10=0
+  list.of.fits[[fit.name]]<-
+    cv.glmnet(X,y,type.measure = 'mse',alpha = i/10,family ='gaussian')
+}
+
+#list.of.fits[[fit.name]]
+
+results<-data.frame()
+
+for (i in 0:10) {
+  fit.name=paste0('alpha',i/10)
+  predicted<-
+    predict(list.of.fits[[fit.name]], s =list.of.fits[[fit.name]]$lambda.1se,
+            newx = X)
+  mse<-mean((y-predicted)^2)
+  temp<-data.frame(alpha =i/10 ,mse =mse, fit.name =fit.name )
+  results<-rbind(results,temp)
+}
+results
+```
+- From the results data frame we can conclude that Elastic net regression is the ideal model to use with alpha =0.9
+```{r}
+set.seed(42)
+# Fitting the best elastic model
+alpha0.9.fit=cv.glmnet(X,y,type.measure = 'mae',alpha=0.9,family='gaussian')
+
+alpha0.9.pred=predict(alpha0.9.fit,s=alpha0.9.fit$lambda.min,newx = X)
+
+mae<-function(y_pred,observed)(sum(abs(observed-y_pred))/length(y_pred))
+mae(alpha0.9.pred,y)
+
+sum(abs(y-alpha0.9.pred))
+#find optimal lambda value that minimizes test MSE
+best_lambda <- alpha0.9.fit$lambda.min
+best_lambda2<-alpha0.9.fit$lambda.1se
+
+Best_model1=glmnet(X,y,alpha = 0.9,lambda = best_lambda)
+Best_model2=glmnet(X,y,alpha = 0.9,lambda = best_lambda2)
+
+coef(Best_model1)
+coef(Best_model2)
+```
+
+
+# Export data
+```{r}
+write.csv(data_May,"May_data24.csv")
+write.csv(Train_data,'Train_data.csv')
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

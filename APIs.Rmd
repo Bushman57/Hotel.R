@@ -1,0 +1,237 @@
+---
+title: "Introduction to API's"
+output: html_notebook
+---
+
+# Working with API with no key required
+
+-The main goal here is to learn how to convert JSOn into a table.
+-To do that we require to essential packages 
+```{r}
+library(httr)
+library(jsonlite)
+
+```
+
+## Create a GET response to call the API
+```{r}
+foodbank<-GET('https://www.givefood.org.uk/api/2/foodbanks/')
+
+# View  API GET response results
+foodbank$status_code  # 200 
+str(foodbank)
+
+# View the main source of the data needed from the API - Normally content
+str(foodbank$content)
+```
+🔑 **Note** Always check the status code which should be 200 to show the data has been extracted succesfully
+
+
+## Convert the raw content to text (In this case, a JSON string)
+```{r}
+foodbankcontent <-httr::content(foodbank,as ='text')
+
+# View JSON string results
+str(foodbankcontent)
+```
+## Convert JSON string to a dataframe and view data in a table format
+```{r}
+foodbankJSON <- jsonlite::fromJSON(foodbankcontent)
+
+View(foodbankJSON)
+```
+
+
+# Working with API that requires one to have a key
+- Remember the essentials packages we will rely on is still jsonlite and httr
+>
+The data we are going to extract using the API key Reed.co.uk which is a site in UK that gives you all the information about all the jobs they have in their website
+
+```{r}
+# Create a GET response to call the API's
+# For this job search we would like to filter our data for the following information
+#  1. Analyst - From the job description
+#  2. London - The location of the job 
+#  3. Distance 15 km - The job place is 15 km within London
+
+jobsearch<- GET('https://www.reed.co.uk/api/1.0/search?keywords=analyst&location=london&distancefromlocation=15?details=true',  #?details=true 💡
+                httr::authenticate( # For API's with authentication
+                  user = "e9914e3a-0d2d-41ec-8b89-19d1473b5419",  # REED_API_Key
+                  password = "",
+                  type = "basic"))
+# View API GET response results
+jobsearch$status_code
+str(jobsearch)
+
+# View the main source of the data needed from the API -Normally content
+str(jobsearch$content)
+
+```
+
+
+💡 **Note** The last part of the https we included `?details=true` this bit of logic that would set what that particular url data will be  
+
+## Hidden keys
+-In the case where you want to have your API hidden you can the following package to read it in to get request
+```{r}
+library(dotenv)
+load_dot_env("cred_env")  # cred_env is the name given to the file containing the API key am guessing it should be within your working directory
+```
+
+
+## Convert the raw content to text 
+```{r}
+jobsearchcontent<- content(jobsearch,as = 'text')
+
+# View JSON string results
+str(jobsearchcontent)
+```
+
+## Convert the JSON string to a dataframe and view the data in a table
+```{r}
+jobsearchJSON<-jsonlite::fromJSON(jobsearchcontent)
+
+View(jobsearchJSON$results)
+
+```
+
+
+# Fuel economy API tutorial
+
+## Example 1 : Fuel prices
+```{r}
+# Build urls
+base_url<-'www.fueleconomy.gov/ws/rest/' #Every API request is gonna involve varies for different API
+info_url<-'fuelprices'
+full_url<-paste0(base_url,info_url)
+full_url
+```
+
+
+## Call API
+```{r}
+api_call<-GET(full_url)
+```
+
+
+## API response
+```{r}
+api_call$status_code
+# 200 indicates the api fetched the data requested
+
+api_call$content
+
+```
+
+
+## Convert response to usable data
+```{r}
+api_char<-rawToChar(api_call$content)
+
+api_JSON<-fromJSON(api_char,flatten = TRUE)
+api_JSON
+
+api_JSON$diesel
+```
+
+## EXAMPLE 2: Vehicle Information 
+```{r}
+# Build urls
+base_url
+
+new_info_url<-"vehicle/menu/options?year=2012&make=Honda&model=Fit"
+
+new_full_url<-paste0(base_url,new_info_url)
+new_full_url
+```
+
+## Call API
+```{r}
+api_call<-GET(new_full_url)
+```
+
+## Check response
+```{r}
+api_call$status_code
+
+```
+# Convert the JSON file to a data table
+```{r}
+# Option 1
+AB<-content(api_call,as ='text')
+
+ABC<-fromJSON(AB)
+ABC$menuItem
+
+# Option 2
+api_char<-rawToChar(api_call$content)
+
+api_JSON<-fromJSON(api_char,flatten = TRUE)
+
+df<-api_JSON$menuItem
+df
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
