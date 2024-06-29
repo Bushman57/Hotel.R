@@ -4,14 +4,18 @@ library(shinyWidgets)
 library(googlesheets4)
 library(DT)
 library(data.table)
+<<<<<<< HEAD
 library(shinyjs)
 library(htmltools)
 library(dipsaus) 
 library(shinymanager)
+=======
+>>>>>>> d7c1272e2ec55919e3f5772b628ea30cd9b78e38
 
 # Authorize app
 gs4_auth(email = "savinskamau01@gmail.com", cache = ".secrets")
 
+<<<<<<< HEAD
 
 # Define credentials for shinymanager
 credentials <- data.frame(
@@ -21,12 +25,17 @@ credentials <- data.frame(
 )
 
 
+=======
+>>>>>>> d7c1272e2ec55919e3f5772b628ea30cd9b78e38
 # Read the Google sheet document
 
 sheet_id <-'14WCJXPrTqObRA-purHkqnGc78duSSLOwQAGWyjmDIzs'
 sales_data<-read_sheet(sheet_id,sheet = 'Sales')
 stock_data<-read_sheet(sheet_id,sheet = 1)
+<<<<<<< HEAD
 sales_receipt<-read_sheet(sheet_id,sheet = 'Sales_Receipt')
+=======
+>>>>>>> d7c1272e2ec55919e3f5772b628ea30cd9b78e38
 
 # Preprocess sales data
 
@@ -40,8 +49,12 @@ ui<-dashboardPage(
     sidebarMenu(
       menuItem("Add Sales", tabName = "add_sales", icon = icon("shopping-cart")),
       menuItem("Update Stock", tabName = "update_stock", icon = icon("warehouse")),
+<<<<<<< HEAD
       menuItem("Stock Value", tabName = "stock_value", icon = icon("dollar-sign")),
       menuItem("Receipt", tabName = "receipt_value", icon = icon("robot"))
+=======
+      menuItem("Stock Value", tabName = "stock_value", icon = icon("dollar-sign"))
+>>>>>>> d7c1272e2ec55919e3f5772b628ea30cd9b78e38
     )
   ),
   dashboardBody(
@@ -260,6 +273,7 @@ ui<-dashboardPage(
                         tags$a(href = "mailto:savinskamau01.com", "bushmansavins@gmail.com")
                     )
                 )
+<<<<<<< HEAD
               )),
       tabItem(tabName = 'receipt_value',
               fluidRow(
@@ -291,6 +305,8 @@ ui<-dashboardPage(
                     uiOutput("receipt"),width = 6
                     
                     )
+=======
+>>>>>>> d7c1272e2ec55919e3f5772b628ea30cd9b78e38
               ))
     )
   )
@@ -298,11 +314,14 @@ ui<-dashboardPage(
 
 
 server <- function(input, output, session) {
+<<<<<<< HEAD
   
   # Wrap server with shinymanager
   res_auth <- secure_server(
     check_credentials = check_credentials(credentials)
   )
+=======
+>>>>>>> d7c1272e2ec55919e3f5772b628ea30cd9b78e38
   # Reactive sales data
   reactive_sales_data <- reactive({
     sales_data
@@ -311,12 +330,16 @@ server <- function(input, output, session) {
   reactive_stock_data <- reactive({
     stock_data
   })
+<<<<<<< HEAD
   # Reactive sales_receipt data
   reactive_receipt_data<-reactive({
     sales_receipt
   })
   
   # Update the drop down choices for drink types
+=======
+  # Update the dropdown choices for footwear types
+>>>>>>> d7c1272e2ec55919e3f5772b628ea30cd9b78e38
   observe({
     updatePickerInput(session, "BarSales", choices = unique(stock_data$Drinks))
   })
@@ -434,6 +457,7 @@ server <- function(input, output, session) {
     
     showNotification("Stock updated successfully", type = "message")
   })
+<<<<<<< HEAD
   # Receipt generator
   
   # Update the drop down choices for Bar drink types
@@ -584,6 +608,11 @@ server <- function(input, output, session) {
 # Wrap UI with shinymanager
 ui <- secure_app(ui)
 
+=======
+  
+}
+
+>>>>>>> d7c1272e2ec55919e3f5772b628ea30cd9b78e38
 shinyApp(ui, server)
 
 
